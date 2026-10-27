@@ -14,5 +14,4 @@ required by Spring Security. These settings should be performance-checked on the
 deployment environment before launch, since password hashing intentionally consumes
 CPU and memory.
 
-This configuration only provides password hashing and matching. It does not yet
-implement account registration, login, JWT issuance, or password reset.
+The encoder is used by the implemented registration, sign-in, and password-reset flows. It only handles password hashing and matching; token issuance and account workflow behavior are documented in [authentication.md](authentication.md).

@@ -1,61 +1,51 @@
 # BookLoop product requirements
 
-This document records product decisions approved for the first version of BookLoop. It is a requirements document, not an implementation plan or database schema. Items under **Still to decide** must be settled before the related feature is built.
+This document records approved first-version product behavior. It describes intended behavior; see [implementation status](implementation-status.md) to distinguish features already available from approved work still pending.
 
 ## Accounts and profiles
 
-- Only account holders can post books, express interest, exchange books, or use other member features.
-- Sign-up uses email and password. Email verification and password reset are included.
-- Email verification links expire after 24 hours; password-reset links expire after 1 hour. Each link can be used once.
-- Verification and password-reset emails use Gmail SMTP. The application supports selectable App Password and OAuth 2.0 authentication modes; local testing uses App Password, while OAuth 2.0 can be configured for deployment. One mode is active per run. SMTP credentials are local secrets, not source-controlled settings.
-- Browser authentication uses 15-minute JWT access tokens held only in memory and 7-day refresh tokens in `HttpOnly`, `Secure`, `SameSite` cookies. Refresh tokens rotate and can be revoked; refresh/logout requests receive CSRF protection.
-- At sign-up, collect display name, email, and password.
-- After sign-up, members verify their email, then complete their profile with a city before accessing BookLoop. A member's city is public.
-- Do not collect mobile numbers in the first version.
+- Only verified account holders who have completed the required profile can use member features.
+- Sign-up uses email and password. Members verify their email before signing in; password reset is available.
+- At sign-up, collect display name, email, and password. After verification, require a public city. Phone numbers are not collected.
+- Members can edit their display name and city. Updating a city also updates their existing listings.
+- Email changes require the current password, notify the old address, and become active only after the new address is verified.
+- Browser authentication uses in-memory JWT access tokens and rotating refresh tokens in `HttpOnly` cookies, with CSRF protection for refresh and logout.
 
-## Book listings and discovery
+## Listings and discovery
 
-- A member can list a book for sale, give it away for free, or offer it for exchange.
-- Each listing has one offer mode at a time.
-- Listing cards show the owner's username, city, and necessary book details.
-- Members can search listings by title, genre, and city.
-- A listing may have multiple genres selected from a predefined set.
-- The initial genre set is Biography, Children, Fantasy, Fiction, History, Mystery, Non-fiction, Poetry, Romance, Science, Science fiction, Self-help, and Thriller.
-- A listing uses the member's public profile city.
-- Required book details: title, author, at least one genre, condition, city, and offer mode. Sale listings require a price; the seller may add a purchase bill for OCR verification during creation or later. Description, book photos, and ISBN are optional. The listing username comes from the member account.
+- A member can post each book as one of: Sale, Free, or Exchange.
+- Listing cards show the owner's display name, public city, and book details.
+- Members can search by title, genre, and city. A listing can have multiple genres.
+- Required book details are title, author, at least one genre, condition, and offer type. Sale listings require an asking price. Description and ISBN are optional.
+- The listing city comes from the member profile.
+- Sale price is seller-set; the first version does not process payment.
+- Free-book claim and fulfillment behavior remains to be implemented.
 
-## Sale interest and communication
+## Sale listings
 
-- The book action is **I'm interested**, not **Buy**.
-- An interested member sends an interest request to the seller.
-- The seller is notified in the app and by email, then can accept or decline.
-- On acceptance, the seller may reserve the listing and close other pending interests or keep it available.
-- If the seller accepts, a private in-app chat opens for the two members.
-- The interaction coordinates interest and communication; in-app payment handling has not been decided.
+- Buyers choose **I'm interested** instead of purchasing in the app. An interest request goes to the seller.
+- Sellers can accept or decline. At acceptance, the seller chooses whether to reserve the listing. Reserving removes it from Browse and closes other pending interests; keeping it listed leaves it available.
+- A seller may list without a bill. Such listings are marked unverified. A seller may upload a bill during listing creation or later. OCR grants a tick only when it reads a paid amount greater than the current asking price.
+- Bills remain private unless the seller manually shares a redacted copy in the private buyer/seller chat.
+- After acceptance, a private chat opens between the buyer and seller. The seller manually marks the book sold after an offline sale; this removes it from Browse and closes other pending interests while preserving chat history.
+- OCR only checks the numeric comparison; the buyer is responsible for verifying bill authenticity.
 
-## Exchange requests
+## Exchanges
 
-- A member requesting an exchange selects one of their own BookLoop book listings to offer.
-- The request goes to the owner of the requested book.
-- If the owner accepts, both books are reserved and a private chat opens.
-- Only participants in an accepted exchange can see each other's online/last-active status. Last-active time is shown in relative form, such as “5 minutes ago.”
-- Either participant can cancel an accepted exchange. Cancellation releases both books.
-- Both participants must confirm completion before the exchange is marked complete.
+- A requester selects one of their own available Exchange listings as the offer for another member's available Exchange listing.
+- The requested-book owner can accept or decline. Acceptance reserves both books and closes conflicting pending requests. Multiple pending requests are allowed before acceptance.
+- Both members must confirm completion. Only then do both books leave Browse as exchanged.
+- Either participant can cancel a pending request or accepted exchange. Canceling an accepted exchange releases both books.
+- Accepted exchange participants can use private, text-only chat and see online/last-active status. Presence is considered online for two minutes after activity.
+- Pending exchange requests expire after seven days. Exchange history remains visible but read-only after cancellation or completion.
 
-## Sale-price receipt check
+## Notifications and language
 
-- For a book listed for sale, the entered sale price must be lower than the amount paid for the book shown on its purchase bill.
-- The seller can submit a bill as a photo, screenshot, or electronic copy.
-- OCR reads the bill amount and checks the sale price against it.
-- When OCR can read the amount and the price check passes, the listing displays a tick labeled **OCR price check passed**. This label means the amount comparison passed; it does not claim that OCR authenticated the bill.
-- The interested buyer checks the bill's authenticity. After the seller accepts the interest request and the private chat opens, the seller can share a redacted copy of the bill in that chat.
-- Bills are not displayed publicly on listing cards.
+- The Exchanges entry has an in-app badge for unreviewed incoming requests and unread messages. New exchange requests also trigger email notification.
+- The initial interface is English-only.
 
-## Still to decide
+## Deferred decisions
 
-- Whether a requester may offer only a listing whose mode is **exchange**.
-- How the predefined genre list is selected and maintained.
-- How redacted bill copies are produced and shared in chat.
-- Purchase completion, payment, and listing availability rules for sale and free listings.
-- Hosting and deployment.
-- Gmail sender address and credentials.
+- Hosting and production deployment.
+- Payment handling and sale completion beyond manually marking a listing sold.
+- Free-book claim, handover, and completion workflow.

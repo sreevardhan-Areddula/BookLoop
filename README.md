@@ -1,33 +1,29 @@
 # BookLoop
 
-BookLoop is a peer-to-peer book-sharing and marketplace platform.
+BookLoop is a peer-to-peer book-sharing, exchange, and sale-interest platform.
 
 ## Project structure
 
-- `frontend/` — React application built with Vite and TypeScript.
-- `backend/` — Spring Boot application built with Maven and Java 21.
-- `docs/` — Project architecture and technical decisions.
+- `frontend/` — React, TypeScript, and Vite application.
+- `backend/` — Spring Boot REST API built with Maven.
+- `docs/` — Product decisions, workflows, API details, and setup guides.
 
-## Selected stack
+## Stack
 
-- Frontend: React, Vite, TypeScript
-- Backend: Spring Boot, Maven, Java 21
-- Database: MySQL Community Server 8.4 LTS
+- Frontend: React, TypeScript, Vite, CSS, and Oxlint.
+- Backend: Spring Boot, Spring Security, Spring Data JPA, and Flyway.
+- Database: MySQL Community Server 8.4 LTS.
+- Backend source targets Java 21; local development has also been run on Java 25.
 
-Hosting and deployment choices will be made in a later phase. Application features, API contracts, authentication, and database schema have not been defined yet.
+## Current features
 
-## Current status
+BookLoop currently supports verified member accounts, profile management, book listings, search, exchange requests and chat, OCR-assisted sale-bill price checks, and Sale interest requests. Sale-specific chat, manual sold marking, and a Free-book claim workflow are still pending. See [implementation status](docs/implementation-status.md) for the current feature boundary and [product requirements](docs/product-requirements.md) for approved behavior.
 
-The frontend scaffold and initial Spring Boot backend scaffold are in place. Marketplace features, API contracts, authentication, database schema, and hosting have not been defined yet.
-# BookLoop
+## Run locally
 
-BookLoop is a peer-to-peer book marketplace and exchange platform built with React, TypeScript, Spring Boot, and MySQL.
+- Frontend: [frontend/README.md](frontend/README.md)
+- Backend and MySQL: [backend/README.md](backend/README.md)
+- Authentication and local secret configuration: [authentication guide](docs/authentication.md)
+- System design: [architecture](docs/architecture.md)
 
-## Local setup
-
-- Frontend: see [frontend/README.md](frontend/README.md)
-- Backend, MySQL, and Gmail configuration: see [backend/README.md](backend/README.md)
-- Authentication flows and local secrets: see [docs/authentication.md](docs/authentication.md)
-- Email verification setup: see [docs/email-verification.md](docs/email-verification.md)
-
-Authentication currently includes signup, email verification, Argon2id password storage, JWT access tokens, rotating HttpOnly refresh cookies, city completion, logout, and password recovery.
+Hosting and deployment choices are deferred until the local application is ready for that phase.

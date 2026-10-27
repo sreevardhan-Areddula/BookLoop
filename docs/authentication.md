@@ -44,6 +44,6 @@ Use `BOOKLOOP_COOKIE_SECURE=true` behind HTTPS. Keep JWT signing keys private an
 
 See [email-verification.md](email-verification.md) for `APP_PASSWORD` and `OAUTH2` configuration. Email verification and password recovery cannot deliver links until one mode is configured. The app deliberately does not print reset or verification links in logs.
 
-## Current limits
+## Production follow-up
 
-Refresh-session cleanup/expiry retention, rate limiting across instances, account deletion, and marketplace authorization policies still need product decisions before production deployment.
+Refresh-session cleanup/expiry retention, rate limiting across instances, account deletion, and a production security review remain before deployment. Marketplace authorization is implemented for the current account and listing workflows; see [implementation status](implementation-status.md) for unfinished marketplace features.

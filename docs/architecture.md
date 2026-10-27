@@ -1,35 +1,30 @@
-# Architecture
+# BookLoop architecture
 
-## Current direction
+## Current system
 
-BookLoop will use a separate frontend and backend within this repository:
+BookLoop is a local, single-page React application backed by a Spring Boot REST API and MySQL. The frontend and backend live in separate folders in this repository.
 
-- `frontend/` will contain a React application built with Vite and TypeScript.
-- `backend/` contains a Spring Boot 4.1.2 application built with Maven and targeting Java 21.
-- MySQL is the selected database.
+- `frontend/`: React, TypeScript, Vite, CSS, and Oxlint. The app handles browser navigation for `/books`, `/profile`, and `/exchanges`.
+- `backend/`: Spring Boot 4.1.2, Maven, Spring MVC, Spring Security, Spring Data JPA, Flyway, and MySQL Connector/J. The source targets Java 21. The local machine currently runs Java 25.
+- Database: MySQL Community Server 8.4 LTS. Versioned Flyway migrations create and evolve the schema.
+- Local scripts: `backend/setup-local-mysql.ps1` initializes the local database; `backend/run-local.ps1` starts MySQL if needed, loads ignored local environment settings, and launches the API.
 
-The frontend and backend are separate parts of the project. The React app calls the Spring API. Local API and email-verification connections are configured through environment variables.
+The local frontend runs at `http://localhost:5173`; the API listens at `http://localhost:8081`. The browser sends API requests to the configured API origin. Gmail delivery is configured through environment variables and is not committed to source control.
 
-The current system has Java 25 and Maven 3.9.16 available. The backend targets Java 21 bytecode and is built with Java 25; Spring Boot 4.1.2 supports Java versions through 27. The backend uses Spring MVC, Spring Data JPA, MySQL Connector/J, Spring Security Crypto, and Flyway. Account and email-verification tables are created from versioned migrations. Local development uses MySQL Community Server 8.4.13 LTS bound to `127.0.0.1`, a `bookloop_dev` database, and credentials in the ignored `backend/.env.local` file. `backend/run-local.ps1` starts MySQL when needed, loads the app credentials, and launches Spring Boot.
+## Authentication and data boundaries
 
-## Frontend setup
+Members authenticate with email and password. Passwords are stored as Argon2id hashes. Short-lived JWT access tokens are kept in browser memory; rotating refresh tokens are held in `HttpOnly` cookies, with CSRF protection on refresh and logout. Email verification is required before member access. A public city is required before members can use the marketplace.
 
-- Scaffold: Vite React TypeScript template.
-- Styling: plain CSS for the initial placeholder; future page designs are deferred.
-- Linting: Oxlint.
-- The `App` component includes the email-verification page; the marketplace experience remains to be built.
-- Frontend packages are installed from `frontend/package-lock.json`.
+MySQL stores account and marketplace records, including private sale-bill bytes. Sale bills are not exposed as public URLs. English OCR runs locally in the backend and only grants a tick when it reads a paid total greater than the asking price; it does not authenticate the bill.
 
-## Decisions deferred
+## Implemented and pending features
 
-The following decisions remain open and should be agreed before their implementation:
+See [implementation status](implementation-status.md) for the detailed current feature boundary. Exchange chat is implemented. Sale interest requests and seller acceptance/decline are implemented, but the Sale-specific private chat, redacted bill sharing, and sold-marking flow remain pending. Free-book claiming is also pending.
 
-- Hosting and deployment strategy
-- Authentication and authorization
-- API structure and endpoint contracts
-- Database schemas beyond accounts and email verification
-- Product workflows and user interface
+## Deployment
 
-## Function documentation practice
+Hosting and production deployment have not been selected. Local configuration and OCR runtime needs are documented in [backend setup](../backend/README.md) and [Sale bill OCR](sale-bill-ocr.md).
 
-Before adding a function to the frontend or backend, its intended behavior will be explained and agreed as part of the task. Documentation will be updated as architecture decisions are made.
+## Documentation practice
+
+Product decisions live in [product requirements](product-requirements.md); current behavior and unfinished workflows live in [implementation status](implementation-status.md) and the feature guides. When a workflow or API changes, update its guide and the status page in the same change. Keep local credentials in ignored environment files.
