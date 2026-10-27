@@ -1,0 +1,2 @@
+ALTER TABLE email_verification_tokens
+    ADD COLUMN created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6);

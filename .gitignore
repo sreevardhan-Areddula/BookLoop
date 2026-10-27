@@ -1,0 +1,24 @@
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+
+# Java / Maven
+backend/target/
+backend/.idea/
+*.iml
+
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+
+# Editors and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
