@@ -20,6 +20,12 @@ The first genre choices are Biography, Children, Fantasy, Fiction, History, Myst
 
 Sellers can publish a sale listing without a bill; it appears with **Price unverified**. If a seller uploads a bill during listing creation, OCR must identify a paid amount above the asking price before publication. The owner can also add a bill later from My Books. A successful check marks the listing with **OCR price check passed** and a tick; the bill itself stays private. The tick means only that OCR read a paid amount above the current price and does not authenticate the bill. Owners may not attach another member's bill or a bill that did not pass.
 
+## Free-book claims
+
+Members can request another member's available Free listing. The owner reviews each request and may accept or decline it. Multiple requests can remain pending; accepting one reserves the listing, removes it from Browse, and closes competing pending requests. Acceptance opens a private text chat for arranging pickup. Either participant can cancel an accepted claim, which makes the listing available again and leaves the conversation read-only. A cancelled claim's history stays visible. New requests trigger an owner email, and the Exchanges badge counts unreviewed incoming requests and unread messages. Claims do not expire.
+
+The owner has no action to mark pickup complete yet, so an accepted listing remains reserved unless the claim is cancelled. See [free-claim workflow](free-claim-workflow.md).
+
 ## Remaining marketplace work
 
-Free-book claim and handover behavior is still pending. Sale interest requests, private chat, redacted bill sharing, and manual sold marking are documented in [sale-interest-workflow.md](sale-interest-workflow.md).
+Sale interest requests, private chat, redacted bill sharing, and manual sold marking are documented in [sale-interest-workflow.md](sale-interest-workflow.md).

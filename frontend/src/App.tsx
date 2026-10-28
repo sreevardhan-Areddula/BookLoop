@@ -66,6 +66,13 @@ type SaleChatMessage = {
   id: string; senderId: string; senderName: string; text: string | null; createdAt: string; readAt: string | null
   sharedBillId: string | null; sharedBillFilename: string | null
 }
+type FreeClaimStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CLOSED' | 'CANCELLED'
+type FreeClaimItem = {
+  id: string; status: FreeClaimStatus; book: BookListing; requesterId: string; requesterName: string
+  ownerId: string; ownerName: string; incoming: boolean; createdAt: string; acceptedAt: string | null
+  cancelledAt: string | null; cancelledById: string | null
+}
+type FreeClaimMessage = { id: string; senderId: string; senderName: string; text: string; createdAt: string; readAt: string | null }
 type Presence = { displayName: string; online: boolean; lastActiveAt: string | null }
 const genres = ['Biography', 'Children', 'Fantasy', 'Fiction', 'History', 'Mystery', 'Non-fiction', 'Poetry', 'Romance', 'Science', 'Science fiction', 'Self-help', 'Thriller']
 let accessToken: string | null = null
@@ -99,13 +106,15 @@ async function readError(response: Response, fallback: string) {
 // Fetches the member-specific count used by the Exchanges header badge.
 async function loadUnreadCount(token: string) {
   const headers = { Authorization: `Bearer ${token}` }
-  const [exchangeResponse, saleResponse] = await Promise.all([
+  const [exchangeResponse, saleResponse, freeResponse] = await Promise.all([
     fetch(`${apiBaseUrl}/api/exchanges/unread-count`, { headers }),
     fetch(`${apiBaseUrl}/api/sale-interests/unread-count`, { headers }),
+    fetch(`${apiBaseUrl}/api/free-claims/unread-count`, { headers }),
   ])
   const exchangeCount = exchangeResponse.ok ? Number((await exchangeResponse.json()).count) || 0 : 0
   const saleCount = saleResponse.ok ? Number((await saleResponse.json()).count) || 0 : 0
-  return exchangeCount + saleCount
+  const freeCount = freeResponse.ok ? Number((await freeResponse.json()).count) || 0 : 0
+  return exchangeCount + saleCount + freeCount
 }
 
 // Rotates the HttpOnly refresh cookie with CSRF protection and deduplicates simultaneous browser calls.
@@ -695,6 +704,7 @@ function BooksPage() {
   const [verifyingListingId, setVerifyingListingId] = useState<string | null>(null)
   const [markingSaleSoldId, setMarkingSaleSoldId] = useState<string | null>(null)
   const [sendingInterestFor, setSendingInterestFor] = useState<string | null>(null)
+  const [sendingFreeClaimFor, setSendingFreeClaimFor] = useState<string | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
 
   // Fetches member-only book listings using the selected title, genre, and city filters.
@@ -889,6 +899,23 @@ function BooksPage() {
     } finally { setSendingInterestFor(null) }
   }
 
+  // Sends a member's request to the owner of an available Free listing.
+  async function sendFreeClaim(book: BookListing) {
+    if (!token || sendingFreeClaimFor) return
+    setSendingFreeClaimFor(book.id)
+    setMessage('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/free-claims`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ listingId: book.id }),
+      })
+      if (!response.ok) throw new Error(await readError(response, 'Could not request this Free book.'))
+      setMessage(`Your request for “${book.title}” was sent. The owner can review it in Exchanges.`)
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Could not request this Free book.')
+    } finally { setSendingFreeClaimFor(null) }
+  }
+
   // Validates and posts a listing, then reloads the results so the new book is visible.
   async function createListing(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -964,6 +991,7 @@ function BooksPage() {
             {book.offerType === 'SALE' ? <span className={book.salePriceVerified ? 'sale-verification verified' : 'sale-verification'}>{book.salePriceVerified ? '✓ OCR price check passed' : 'Price unverified'}</span> : null}
             {book.description ? <p className="book-description">{book.description}</p> : null}
             {book.offerType === 'SALE' && book.ownerId !== member?.id ? <button className="primary-button" disabled={sendingInterestFor === book.id} onClick={() => void sendSaleInterest(book)}>{sendingInterestFor === book.id ? 'Sending...' : 'I’m interested'}</button> : null}
+            {book.offerType === 'FREE' && book.ownerId !== member?.id ? <button className="primary-button" disabled={sendingFreeClaimFor === book.id} onClick={() => void sendFreeClaim(book)}>{sendingFreeClaimFor === book.id ? 'Sending request…' : 'Request free book'}</button> : null}
             {book.offerType === 'EXCHANGE' && book.ownerId !== member?.id ? <button className="primary-button" onClick={() => void beginExchangeRequest(book)}>Request exchange</button> : null}
             <footer className="book-card-footer"><span>{book.ownerName}</span><span>{book.city}</span></footer>
           </article>)}</div>}
@@ -1016,7 +1044,11 @@ function ExchangesPage() {
   const [token, setToken] = useState<string | null>(null)
   const [exchanges, setExchanges] = useState<ExchangeItem[]>([])
   const [saleInterests, setSaleInterests] = useState<SaleInterestItem[]>([])
-  const [inboxTab, setInboxTab] = useState<'exchange' | 'sale'>('exchange')
+  const [freeClaims, setFreeClaims] = useState<FreeClaimItem[]>([])
+  const [inboxTab, setInboxTab] = useState<'exchange' | 'sale' | 'free'>('exchange')
+  const [selectedFreeClaim, setSelectedFreeClaim] = useState<string | null>(null)
+  const [freeMessages, setFreeMessages] = useState<FreeClaimMessage[]>([])
+  const [freeDraft, setFreeDraft] = useState('')
   const [selectedSaleInterest, setSelectedSaleInterest] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -1054,6 +1086,23 @@ function ExchangesPage() {
     return await response.json() as SaleChatMessage[]
   }
 
+  // Loads Free claims only for the signed-in member as requester or listing owner.
+  async function loadFreeClaims(authToken: string) {
+    const response = await fetch(`${apiBaseUrl}/api/free-claims`, { headers: { Authorization: `Bearer ${authToken}` } })
+    if (!response.ok) throw new Error(await readError(response, 'Could not load Free-book claims.'))
+    setFreeClaims(await response.json() as FreeClaimItem[])
+  }
+
+  // Loads private Free-claim chat history; the API marks received messages read for the participant.
+  async function loadFreeMessages(authToken: string, claimId: string, after?: string) {
+    const query = after ? `?after=${encodeURIComponent(after)}` : ''
+    const response = await fetch(`${apiBaseUrl}/api/free-claims/${claimId}/messages${query}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+    if (!response.ok) throw new Error(await readError(response, 'Could not load the Free-book conversation.'))
+    return await response.json() as FreeClaimMessage[]
+  }
+
   // Restores the signed-in session and opens the member's exchange inbox.
   useEffect(() => {
     let active = true
@@ -1063,7 +1112,7 @@ function ExchangesPage() {
       accessToken = session.accessToken
       setMember(session.member)
       setToken(session.accessToken)
-      try { await Promise.all([loadExchanges(session.accessToken), loadSaleInterests(session.accessToken)]) }
+      try { await Promise.all([loadExchanges(session.accessToken), loadSaleInterests(session.accessToken), loadFreeClaims(session.accessToken)]) }
       catch (cause) { if (active) setError(cause instanceof Error ? cause.message : 'Could not load requests.') }
     }).catch(() => { if (active) setError('Could not restore your BookLoop session.') })
     return () => { active = false }
@@ -1074,7 +1123,7 @@ function ExchangesPage() {
     if (!token) return
     let active = true
     const refresh = async () => {
-      try { await Promise.all([loadExchanges(token), loadSaleInterests(token)]); const count = await loadUnreadCount(token); if (active) setUnreadCount(count) }
+      try { await Promise.all([loadExchanges(token), loadSaleInterests(token), loadFreeClaims(token)]); const count = await loadUnreadCount(token); if (active) setUnreadCount(count) }
       catch (cause) { if (active) setError(cause instanceof Error ? cause.message : 'Could not refresh exchanges.') }
     }
     const timer = window.setInterval(() => { void refresh() }, 15_000)
@@ -1139,6 +1188,66 @@ function ExchangesPage() {
       await loadSaleInterests(token)
       setUnreadCount(await loadUnreadCount(token))
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not mark this book sold.') }
+    finally { setBusy(false) }
+  }
+
+  // Opens a Free-claim request, marks incoming pending claims reviewed, or loads accepted chat history.
+  async function openFreeClaim(item: FreeClaimItem) {
+    setSelectedFreeClaim(item.id); setSelected(null); setSelectedSaleInterest(null)
+    setFreeMessages([]); setMessages([]); setSaleMessages([]); setPresence(null); setError('')
+    if (!token) return
+    if (item.incoming && item.status === 'PENDING') {
+      try {
+        const response = await fetch(`${apiBaseUrl}/api/free-claims/${item.id}/review`, {
+          method: 'POST', headers: { Authorization: `Bearer ${token}` },
+        })
+        if (!response.ok) throw new Error(await readError(response, 'Could not open this Free-book claim.'))
+        setUnreadCount(await loadUnreadCount(token))
+      } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not open this Free-book claim.') }
+    }
+    if (item.status === 'ACCEPTED' || item.status === 'CANCELLED') {
+      try {
+        setFreeMessages(await loadFreeMessages(token, item.id))
+        setUnreadCount(await loadUnreadCount(token))
+      } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load the Free-book conversation.') }
+    }
+  }
+
+  // Lets the owner accept or decline, or either participant cancel, then refreshes requests and chat state.
+  async function performFreeClaimAction(id: string, action: 'accept' | 'decline' | 'cancel') {
+    if (!token || busy) return
+    setBusy(true); setError('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/free-claims/${id}/${action}`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) throw new Error(await readError(response, `Could not ${action} this Free-book claim.`))
+      await loadFreeClaims(token)
+      if (action === 'accept') {
+        setSelectedFreeClaim(id)
+        setFreeMessages(await loadFreeMessages(token, id))
+      } else if (action === 'cancel' && selectedFreeClaim === id) {
+        setFreeMessages(await loadFreeMessages(token, id))
+      }
+      setUnreadCount(await loadUnreadCount(token))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : `Could not ${action} this Free-book claim.`) }
+    finally { setBusy(false) }
+  }
+
+  // Sends a text-only private message while the selected Free claim is accepted.
+  async function sendFreeChatMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token || !selectedFreeClaim || !freeDraft.trim() || busy) return
+    setBusy(true); setError('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/free-claims/${selectedFreeClaim}/messages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: freeDraft }),
+      })
+      if (!response.ok) throw new Error(await readError(response, 'Could not send your message.'))
+      const sent = await response.json() as FreeClaimMessage
+      setFreeMessages((current) => [...current, sent]); setFreeDraft('')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not send your message.') }
     finally { setBusy(false) }
   }
 
@@ -1269,6 +1378,28 @@ function ExchangesPage() {
     return () => { active = false; window.clearInterval(timer) }
   }, [token, selectedSaleInterest, saleInterests, saleMessages])
 
+  // Polls an active Free-claim chat every five seconds and updates the shared unread badge.
+  useEffect(() => {
+    if (!token || !selectedFreeClaim) return
+    const item = freeClaims.find((candidate) => candidate.id === selectedFreeClaim)
+    if (!item || item.status !== 'ACCEPTED') return
+    let active = true
+    const poll = async () => {
+      const after = freeMessages.length ? freeMessages[freeMessages.length - 1].createdAt : undefined
+      try {
+        const incoming = await loadFreeMessages(token, selectedFreeClaim, after)
+        if (active && incoming.length) setFreeMessages((current) => [
+          ...current,
+          ...incoming.filter((message) => !current.some((existing) => existing.id === message.id)),
+        ])
+        const count = await loadUnreadCount(token)
+        if (active) setUnreadCount(count)
+      } catch { /* Temporary polling failures retry on the next interval. */ }
+    }
+    const timer = window.setInterval(() => { void poll() }, 5_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [token, selectedFreeClaim, freeClaims, freeMessages])
+
   // Records chat presence every 30 seconds and displays only the other exchange participant's status.
   useEffect(() => {
     if (!token || !selected) return
@@ -1331,7 +1462,9 @@ function ExchangesPage() {
 
   const selectedExchange = exchanges.find((item) => item.id === selected) || null
   const selectedSaleInterestItem = saleInterests.find((item) => item.id === selectedSaleInterest) || null
+  const selectedFreeClaimItem = freeClaims.find((item) => item.id === selectedFreeClaim) || null
   const incomingSaleInterestCount = saleInterests.filter((item) => item.incoming && item.status === 'PENDING').length
+  const incomingFreeClaimCount = freeClaims.filter((item) => item.incoming && item.status === 'PENDING').length
   const partnerName = selectedExchange ? selectedExchange.incoming ? selectedExchange.requesterName : selectedExchange.ownerName : ''
   const activeHistory = ['ACCEPTED', 'CANCELLED', 'COMPLETED'].includes(selectedExchange?.status || '')
   return <main className="books-page">
@@ -1341,8 +1474,9 @@ function ExchangesPage() {
     <section className="exchanges-layout">
       <div className="browse-column">
         <nav className="offer-tabs request-tabs" aria-label="Request inbox" role="tablist">
-          <button role="tab" aria-selected={inboxTab === 'exchange'} className={inboxTab === 'exchange' ? 'offer-tab active' : 'offer-tab'} onClick={() => { setInboxTab('exchange'); setSelectedSaleInterest(null) }}>Exchanges</button>
-          <button role="tab" aria-selected={inboxTab === 'sale'} className={inboxTab === 'sale' ? 'offer-tab active' : 'offer-tab'} onClick={() => { setInboxTab('sale'); setSelected(null); setSelectedSaleInterest(null) }}>Sale interests{incomingSaleInterestCount ? ` (${incomingSaleInterestCount})` : ''}</button>
+          <button role="tab" aria-selected={inboxTab === 'exchange'} className={inboxTab === 'exchange' ? 'offer-tab active' : 'offer-tab'} onClick={() => { setInboxTab('exchange'); setSelectedSaleInterest(null); setSelectedFreeClaim(null) }}>Exchanges</button>
+          <button role="tab" aria-selected={inboxTab === 'sale'} className={inboxTab === 'sale' ? 'offer-tab active' : 'offer-tab'} onClick={() => { setInboxTab('sale'); setSelected(null); setSelectedFreeClaim(null) }}>Sale interests{incomingSaleInterestCount ? ` (${incomingSaleInterestCount})` : ''}</button>
+          <button role="tab" aria-selected={inboxTab === 'free'} className={inboxTab === 'free' ? 'offer-tab active' : 'offer-tab'} onClick={() => { setInboxTab('free'); setSelected(null); setSelectedSaleInterest(null) }}>Free claims{incomingFreeClaimCount ? ` (${incomingFreeClaimCount})` : ''}</button>
         </nav>
         {inboxTab === 'exchange' ? <section><h2>Requests and history</h2>{exchanges.length === 0 ? <p className="empty-state">No exchange requests yet. Browse books to request an exchange.</p> : <div className="exchange-list">
         {exchanges.map((item) => <article className={selected === item.id ? 'exchange-card selected' : 'exchange-card'} key={item.id}>
@@ -1355,7 +1489,7 @@ function ExchangesPage() {
           {item.status === 'ACCEPTED' ? <button className="secondary-button" disabled={busy || (item.incoming ? Boolean(item.ownerCompletedAt) : Boolean(item.requesterCompletedAt))} onClick={() => void performAction(item.id, 'complete')}>{(item.incoming ? item.ownerCompletedAt : item.requesterCompletedAt) ? 'You confirmed completion' : 'Confirm exchange complete'}</button> : null}
           {item.status === 'ACCEPTED' ? <button className="text-button" onClick={() => void openConversation(item)}>Open chat</button> : null}
         </article>)}
-       </div>}</section> : <section><h2>Sale interests</h2>{saleInterests.length === 0 ? <p className="empty-state">No Sale interest requests yet. Browse Sale listings to express interest in a book.</p> : <div className="exchange-list">
+       </div>}</section> : inboxTab === 'sale' ? <section><h2>Sale interests</h2>{saleInterests.length === 0 ? <p className="empty-state">No Sale interest requests yet. Browse Sale listings to express interest in a book.</p> : <div className="exchange-list">
          {saleInterests.map((item) => <article className={selectedSaleInterest === item.id ? 'exchange-card selected' : 'exchange-card'} key={item.id}>
            <button className="exchange-card-select" onClick={() => void openSaleInterest(item)}>
              <span className="exchange-card-title">{item.incoming ? `${item.requesterName} is interested in your book` : `Your interest in ${item.ownerName}’s book`}</span>
@@ -1366,9 +1500,26 @@ function ExchangesPage() {
            {item.incoming && item.status === 'ACCEPTED' && item.book.availability !== 'SOLD' ? <button className="secondary-button" disabled={busy} onClick={() => void markSaleInterestSold(item)}>Mark book sold</button> : null}
            {item.incoming && item.status === 'CLOSED' ? <p className="field-help">This request closed because the listing was reserved or marked sold.</p> : null}
          </article>)}
-        </div>}</section>}
+       </div>}</section> : <section><h2>Free claims</h2>{freeClaims.length === 0 ? <p className="empty-state">No Free-book claims yet. Browse Free books to request one.</p> : <div className="exchange-list">
+         {freeClaims.map((item) => <article className={selectedFreeClaim === item.id ? 'exchange-card selected' : 'exchange-card'} key={item.id}>
+           <button className="exchange-card-select" onClick={() => void openFreeClaim(item)}>
+             <span className="exchange-card-title">{item.incoming ? `${item.requesterName} requested your Free book` : `Your request to ${item.ownerName}`}</span>
+             <span>{item.book.title}</span><span className="exchange-status">{item.status.toLowerCase()}</span>
+           </button>
+           {item.incoming && item.status === 'PENDING' ? <div className="exchange-actions"><button className="primary-button" disabled={busy} onClick={() => void performFreeClaimAction(item.id, 'accept')}>Accept · reserve book</button><button className="secondary-button" disabled={busy} onClick={() => void performFreeClaimAction(item.id, 'decline')}>Decline</button></div> : null}
+           {['PENDING', 'ACCEPTED'].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => void performFreeClaimAction(item.id, 'cancel')}>Cancel claim</button> : null}
+           {item.status === 'ACCEPTED' ? <p className="field-help">The book is reserved. Use private chat to arrange pickup.</p> : null}
+           {item.status === 'CLOSED' ? <p className="field-help">This claim closed because another claimant was accepted.</p> : null}
+           {item.status === 'CANCELLED' ? <p className="field-help">The claim was cancelled. The book is available again.</p> : null}
+         </article>)}
+       </div>}</section>}
       </div>
-      <aside className="add-book-panel exchange-chat-panel"><h2>{selectedSaleInterestItem ? `Chat with ${selectedSaleInterestItem.incoming ? selectedSaleInterestItem.requesterName : selectedSaleInterestItem.ownerName}` : selectedExchange ? `Chat with ${partnerName}` : 'Exchange chat'}</h2>
+      <aside className="add-book-panel exchange-chat-panel"><h2>{selectedFreeClaimItem ? `Chat with ${selectedFreeClaimItem.incoming ? selectedFreeClaimItem.requesterName : selectedFreeClaimItem.ownerName}` : selectedSaleInterestItem ? `Chat with ${selectedSaleInterestItem.incoming ? selectedSaleInterestItem.requesterName : selectedSaleInterestItem.ownerName}` : selectedExchange ? `Chat with ${partnerName}` : 'Exchange chat'}</h2>
+        {selectedFreeClaimItem && ['ACCEPTED', 'CANCELLED'].includes(selectedFreeClaimItem.status) ? <>
+          <div className="chat-history" aria-live="polite">{freeMessages.map((item) => <article className={item.senderId === member?.id ? 'chat-message own' : 'chat-message'} key={item.id}><strong>{item.senderName}</strong><p>{item.text}</p><time>{new Date(item.createdAt).toLocaleString()}</time></article>)}{freeMessages.length === 0 ? <p className="empty-state">No messages yet. Arrange a pickup with the book owner.</p> : null}</div>
+          {selectedFreeClaimItem.status === 'ACCEPTED' ? <form className="chat-composer" onSubmit={sendFreeChatMessage}><label htmlFor="free-chat-draft">Message</label><textarea id="free-chat-draft" maxLength={2000} required value={freeDraft} onChange={(event) => setFreeDraft(event.target.value)} /><button className="primary-button" disabled={busy || !freeDraft.trim()}>Send</button></form> : <p className="field-help">This chat is read-only because the claim was cancelled. The listing is available again.</p>}
+        </> : null}
+        {selectedFreeClaimItem && !['ACCEPTED', 'CANCELLED'].includes(selectedFreeClaimItem.status) ? <p className="empty-state">Private chat opens when the owner accepts the request. This claim is {selectedFreeClaimItem.status.toLowerCase()}.</p> : null}
         {selectedSaleInterestItem?.status === 'ACCEPTED' ? <>
           <div className="chat-history" aria-live="polite">{saleMessages.map((item) => <article className={item.senderId === member?.id ? 'chat-message own' : 'chat-message'} key={item.id}>
             <strong>{item.senderName}</strong>
@@ -1389,7 +1540,7 @@ function ExchangesPage() {
         {selectedExchange && activeHistory ? <><p className="presence-label">{presence ? presence.online ? 'Online now' : presence.lastActiveAt ? `Last active ${formatLastActive(presence.lastActiveAt)}` : 'Status unavailable' : 'Checking status…'}</p>
           <div className="chat-history" aria-live="polite">{messages.map((item) => <article className={item.senderId === member?.id ? 'chat-message own' : 'chat-message'} key={item.id}><strong>{item.senderName}</strong><p>{item.text}</p><time>{new Date(item.createdAt).toLocaleString()}</time></article>)}{messages.length === 0 ? <p className="empty-state">No messages yet. Say hello to coordinate the exchange.</p> : null}</div>
           {selectedExchange.status === 'ACCEPTED' ? <form className="chat-composer" onSubmit={sendChatMessage}><label htmlFor="chat-draft">Message</label><textarea id="chat-draft" maxLength={2000} required value={draft} onChange={(event) => setDraft(event.target.value)} /><button className="primary-button" disabled={busy || !draft.trim()}>Send</button></form> : <p className="field-help">This conversation is read-only because the exchange is {selectedExchange.status.toLowerCase()}.</p>}
-        </> : selectedSaleInterestItem ? null : <p className="empty-state">Open an accepted exchange to chat. Chat history remains available after cancellation or completion.</p>}
+        </> : selectedFreeClaimItem || selectedSaleInterestItem ? null : <p className="empty-state">Open an accepted exchange to chat. Chat history remains available after cancellation or completion.</p>}
       </aside>
     </section>
   </main>
