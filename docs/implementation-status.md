@@ -8,12 +8,10 @@ This page describes what the current code supports. Approved product behavior th
 - Browse/search, create Sale/Free/Exchange listings, My Books, and seller bill upload with local OCR price checking, including later verification.
 - Exchange request creation, seller review/accept/decline, reservation/conflict closure, cancellation, mutual completion, text chat, unread counts, email notification, and presence.
 - Sale interest requests, seller review/accept/decline, optional reservation, closure of other pending interests when reserving, email notification, and an in-app badge.
+- Private text chat after Sale-interest acceptance, seller-selected redacted bill sharing, and manual Sale listing sold status. Shared copies are private to the buyer and seller; the seller must redact the file before upload.
 
 ## Pending
 
-- Private chat for an accepted Sale interest. The Exchanges page currently records acceptance and displays that Sale chat will come in a later step; Exchange chat is already available.
-- Seller-controlled sharing of a redacted bill copy inside the Sale chat.
-- Seller marking a Sale listing sold, removing it from Browse, and closing other pending interests while preserving conversation history.
 - A Free-book claim/handover workflow. Free listings can be browsed but do not yet have a claim action.
 - Hosting and deployment.
 

@@ -17,6 +17,7 @@ public interface SaleInterestRequestRepository extends JpaRepository<SaleInteres
     long countByOwner_IdAndOwnerViewedAtIsNullAndStatus(UUID ownerId, SaleInterestStatus status);
     List<SaleInterestRequest> findAllByListing_IdAndStatusAndIdNot(UUID listingId,
                                                                    SaleInterestStatus status, UUID excludedId);
+    List<SaleInterestRequest> findAllByListing_IdAndStatus(UUID listingId, SaleInterestStatus status);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select request from SaleInterestRequest request where request.id = :id")

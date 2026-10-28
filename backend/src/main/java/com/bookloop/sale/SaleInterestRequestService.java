@@ -21,15 +21,18 @@ public class SaleInterestRequestService {
     private final BookListingRepository listingRepository;
     private final AccountRepository accountRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final SaleChatMessageRepository chatMessageRepository;
 
     public SaleInterestRequestService(SaleInterestRequestRepository requestRepository,
                                       BookListingRepository listingRepository,
                                       AccountRepository accountRepository,
-                                      ApplicationEventPublisher eventPublisher) {
+                                      ApplicationEventPublisher eventPublisher,
+                                      SaleChatMessageRepository chatMessageRepository) {
         this.requestRepository = requestRepository;
         this.listingRepository = listingRepository;
         this.accountRepository = accountRepository;
         this.eventPublisher = eventPublisher;
+        this.chatMessageRepository = chatMessageRepository;
     }
 
     /** Creates one member's pending interest in another member's available Sale listing. */
@@ -116,8 +119,9 @@ public class SaleInterestRequestService {
     /** Counts incoming pending requests that the seller has not opened yet. */
     @Transactional(readOnly = true)
     public SaleInterestUnreadCountResponse unreadCount(UUID memberId) {
-        return new SaleInterestUnreadCountResponse(requestRepository.countByOwner_IdAndOwnerViewedAtIsNullAndStatus(
-                memberId, SaleInterestStatus.PENDING));
+        long unreviewed = requestRepository.countByOwner_IdAndOwnerViewedAtIsNullAndStatus(
+                memberId, SaleInterestStatus.PENDING);
+        return new SaleInterestUnreadCountResponse(unreviewed + chatMessageRepository.countByRecipient_IdAndReadAtIsNull(memberId));
     }
 
     private void requireOwner(SaleInterestRequest request, UUID memberId) {

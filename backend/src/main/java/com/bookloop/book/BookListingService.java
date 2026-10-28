@@ -5,6 +5,8 @@ import com.bookloop.account.AccountRepository;
 import com.bookloop.sale.SaleBillCheckStatus;
 import com.bookloop.sale.SaleBillDocument;
 import com.bookloop.sale.SaleBillDocumentRepository;
+import com.bookloop.sale.SaleInterestRequestRepository;
+import com.bookloop.sale.SaleInterestStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,12 +25,15 @@ public class BookListingService {
     private final BookListingRepository listingRepository;
     private final AccountRepository accountRepository;
     private final SaleBillDocumentRepository billRepository;
+    private final SaleInterestRequestRepository saleInterestRepository;
 
     public BookListingService(BookListingRepository listingRepository, AccountRepository accountRepository,
-                              SaleBillDocumentRepository billRepository) {
+                              SaleBillDocumentRepository billRepository,
+                              SaleInterestRequestRepository saleInterestRepository) {
         this.listingRepository = listingRepository;
         this.accountRepository = accountRepository;
         this.billRepository = billRepository;
+        this.saleInterestRepository = saleInterestRepository;
     }
 
     /** Validates a member's book details, derives its public city from their profile, and stores it. */
@@ -89,6 +94,25 @@ public class BookListingService {
         }
         SaleBillDocument bill = getPassedBill(ownerId, billId, listing.getAskingPrice());
         listing.markSalePriceVerified(bill.getId());
+        return BookListingResponse.from(listing);
+    }
+
+    /** Marks the owner's Sale listing sold, removes it from Browse, and closes remaining pending interests. */
+    @Transactional
+    public BookListingResponse markSaleListingSold(UUID ownerId, UUID listingId) {
+        BookListing listing = listingRepository.findByIdForUpdate(listingId)
+                .orElseThrow(() -> new IllegalArgumentException("Sale listing was not found."));
+        if (!listing.getOwner().getId().equals(ownerId)) {
+            throw new IllegalArgumentException("Sale listing was not found.");
+        }
+        if (listing.getOfferType() != BookOfferType.SALE
+                || listing.getAvailability() == ListingAvailability.EXCHANGED
+                || listing.getAvailability() == ListingAvailability.SOLD) {
+            throw new IllegalArgumentException("This listing cannot be marked sold.");
+        }
+        listing.setAvailability(ListingAvailability.SOLD);
+        saleInterestRepository.findAllByListing_IdAndStatus(listingId, SaleInterestStatus.PENDING)
+                .forEach(request -> request.close());
         return BookListingResponse.from(listing);
     }
 

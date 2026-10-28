@@ -112,7 +112,7 @@ public class BookListing {
     public String getCity() { return city; }
     public BookOfferType getOfferType() { return offerType; }
     public ListingAvailability getAvailability() { return availability; }
-    /** Changes whether this listing can be requested in a new exchange. */
+    /** Updates listing availability so Browse and request flows respect its current lifecycle state. */
     public void setAvailability(ListingAvailability availability) { this.availability = availability; }
     public BigDecimal getAskingPrice() { return askingPrice; }
     public boolean isSalePriceVerified() { return salePriceVerified; }

@@ -22,7 +22,7 @@ type BookListing = {
   description: string | null
   ownerName: string
   createdAt: string
-  availability: 'AVAILABLE' | 'RESERVED' | 'EXCHANGED'
+  availability: 'AVAILABLE' | 'RESERVED' | 'EXCHANGED' | 'SOLD'
   salePriceVerified: boolean
 }
 type SaleBillUpload = { id: string }
@@ -62,6 +62,10 @@ type ExchangeItem = {
   incoming: boolean
 }
 type ChatMessage = { id: string; senderId: string; senderName: string; text: string; createdAt: string; readAt: string | null }
+type SaleChatMessage = {
+  id: string; senderId: string; senderName: string; text: string | null; createdAt: string; readAt: string | null
+  sharedBillId: string | null; sharedBillFilename: string | null
+}
 type Presence = { displayName: string; online: boolean; lastActiveAt: string | null }
 const genres = ['Biography', 'Children', 'Fantasy', 'Fiction', 'History', 'Mystery', 'Non-fiction', 'Poetry', 'Romance', 'Science', 'Science fiction', 'Self-help', 'Thriller']
 let accessToken: string | null = null
@@ -689,6 +693,7 @@ function BooksPage() {
   const [offeredBookId, setOfferedBookId] = useState('')
   const [requestBusy, setRequestBusy] = useState(false)
   const [verifyingListingId, setVerifyingListingId] = useState<string | null>(null)
+  const [markingSaleSoldId, setMarkingSaleSoldId] = useState<string | null>(null)
   const [sendingInterestFor, setSendingInterestFor] = useState<string | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
 
@@ -849,6 +854,24 @@ function BooksPage() {
     } finally { setVerifyingListingId(null) }
   }
 
+  // Marks an owned Sale listing sold so it leaves Browse and its other pending interests close.
+  async function markSaleListingSold(book: BookListing) {
+    if (!token || markingSaleSoldId || !window.confirm(`Mark “${book.title}” as sold? It will be removed from Browse and pending interests will close.`)) return
+    setMarkingSaleSoldId(book.id)
+    setMessage('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/books/${book.id}/sold`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) throw new Error(await readError(response, 'Could not mark this book sold.'))
+      await loadMyBooks(token)
+      setUnreadCount(await loadUnreadCount(token))
+      setMessage(`“${book.title}” is marked sold and no longer appears in Browse.`)
+    } catch (cause) {
+      setMessage(cause instanceof Error ? cause.message : 'Could not mark this book sold.')
+    } finally { setMarkingSaleSoldId(null) }
+  }
+
   // Sends one authenticated member's interest in another member's available Sale listing.
   async function sendSaleInterest(book: BookListing) {
     if (!token || sendingInterestFor) return
@@ -963,7 +986,10 @@ function BooksPage() {
             {book.offerType === 'SALE' ? <><span className={book.salePriceVerified ? 'sale-verification verified' : 'sale-verification'}>{book.salePriceVerified ? '✓ OCR price check passed' : 'Price unverified'}</span>
               {!book.salePriceVerified ? <div className="verify-sale-control"><label htmlFor={`sale-bill-${book.id}`}>Add bill to request OCR price check</label><input id={`sale-bill-${book.id}`} type="file" accept="image/jpeg,image/png,application/pdf" disabled={verifyingListingId === book.id} onChange={(event) => { const file = event.target.files?.[0]; if (file) void verifyExistingSale(book, file); event.currentTarget.value = '' }} /><span className="field-help">JPEG, PNG, or PDF · up to 5 MB · up to 10 PDF pages</span>{verifyingListingId === book.id ? <span className="field-help">Checking bill…</span> : null}</div> : null}
             </> : null}
-            <span className="availability-badge">{book.availability === 'RESERVED' ? 'Reserved in an exchange' : book.availability === 'EXCHANGED' ? 'Exchange completed' : 'Available'}</span>
+            <span className="availability-badge">{book.availability === 'RESERVED' ? 'Reserved' : book.availability === 'EXCHANGED' ? 'Exchange completed' : book.availability === 'SOLD' ? 'Sold' : 'Available'}</span>
+            {book.offerType === 'SALE' && !['SOLD', 'EXCHANGED'].includes(book.availability)
+              ? <button className="secondary-button mark-sold-button" disabled={markingSaleSoldId === book.id} onClick={() => void markSaleListingSold(book)}>{markingSaleSoldId === book.id ? 'Marking sold…' : 'Mark as sold'}</button>
+              : null}
             <footer className="book-card-footer"><span>{book.ownerName}</span><span>{book.city}</span></footer>
           </article>)}</div>}
       </div> : null}
@@ -994,8 +1020,12 @@ function ExchangesPage() {
   const [selectedSaleInterest, setSelectedSaleInterest] = useState<string | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [saleMessages, setSaleMessages] = useState<SaleChatMessage[]>([])
   const [presence, setPresence] = useState<Presence | null>(null)
   const [draft, setDraft] = useState('')
+  const [saleDraft, setSaleDraft] = useState('')
+  const [sharedBillFile, setSharedBillFile] = useState<File | null>(null)
+  const [redactedConfirmed, setRedactedConfirmed] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1012,6 +1042,16 @@ function ExchangesPage() {
     const response = await fetch(`${apiBaseUrl}/api/sale-interests`, { headers: { Authorization: `Bearer ${authToken}` } })
     if (!response.ok) throw new Error(await readError(response, 'Could not load Sale interest requests.'))
     setSaleInterests(await response.json() as SaleInterestItem[])
+  }
+
+  // Loads a Sale conversation's messages; the API limits access to its accepted buyer and seller.
+  async function loadSaleMessages(authToken: string, interestId: string, after?: string) {
+    const query = after ? `?after=${encodeURIComponent(after)}` : ''
+    const response = await fetch(`${apiBaseUrl}/api/sale-interests/${interestId}/messages${query}`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    })
+    if (!response.ok) throw new Error(await readError(response, 'Could not load the Sale conversation.'))
+    return await response.json() as SaleChatMessage[]
   }
 
   // Restores the signed-in session and opens the member's exchange inbox.
@@ -1045,8 +1085,16 @@ function ExchangesPage() {
   // Marks an incoming pending Sale interest as reviewed when the seller opens its card.
   async function openSaleInterest(item: SaleInterestItem) {
     setSelectedSaleInterest(item.id)
-    setSelected(null); setMessages([]); setPresence(null)
-    if (!token || !item.incoming || item.status !== 'PENDING') return
+    setSelected(null); setMessages([]); setSaleMessages([]); setPresence(null); setError('')
+    if (!token) return
+    if (item.status === 'ACCEPTED') {
+      try {
+        setSaleMessages(await loadSaleMessages(token, item.id))
+        setUnreadCount(await loadUnreadCount(token))
+      } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load the Sale conversation.') }
+      return
+    }
+    if (!item.incoming || item.status !== 'PENDING') return
     try {
       const response = await fetch(`${apiBaseUrl}/api/sale-interests/${item.id}/review`, {
         method: 'POST', headers: { Authorization: `Bearer ${token}` },
@@ -1070,9 +1118,84 @@ function ExchangesPage() {
       })
       if (!response.ok) throw new Error(await readError(response, `Could not ${action} this interest.`))
       await loadSaleInterests(token)
+      if (action === 'accept') {
+        setSelectedSaleInterest(id)
+        setSaleMessages(await loadSaleMessages(token, id))
+      }
       setUnreadCount(await loadUnreadCount(token))
     } catch (cause) { setError(cause instanceof Error ? cause.message : `Could not ${action} this interest.`) }
     finally { setBusy(false) }
+  }
+
+  // Marks the Sale listing from its accepted chat; the API closes only its other pending interests.
+  async function markSaleInterestSold(item: SaleInterestItem) {
+    if (!token || busy || !window.confirm(`Mark “${item.book.title}” as sold? Other pending interests will close.`)) return
+    setBusy(true); setError('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/books/${item.book.id}/sold`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) throw new Error(await readError(response, 'Could not mark this book sold.'))
+      await loadSaleInterests(token)
+      setUnreadCount(await loadUnreadCount(token))
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not mark this book sold.') }
+    finally { setBusy(false) }
+  }
+
+  // Sends a private text message to the other member in the accepted Sale conversation.
+  async function sendSaleChatMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token || !selectedSaleInterest || !saleDraft.trim() || busy) return
+    setBusy(true); setError('')
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/sale-interests/${selectedSaleInterest}/messages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: saleDraft }),
+      })
+      if (!response.ok) throw new Error(await readError(response, 'Could not send your message.'))
+      const sent = await response.json() as SaleChatMessage
+      setSaleMessages((current) => [...current, sent])
+      setSaleDraft('')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not send your message.') }
+    finally { setBusy(false) }
+  }
+
+  // Shares only the seller's selected redacted bill copy inside the private accepted Sale conversation.
+  async function shareSaleBill(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!token || !selectedSaleInterest || !sharedBillFile || !redactedConfirmed || busy) return
+    setBusy(true); setError('')
+    try {
+      const form = new FormData()
+      form.append('file', sharedBillFile)
+      const response = await fetch(`${apiBaseUrl}/api/sale-interests/${selectedSaleInterest}/messages/bill`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+      })
+      if (!response.ok) throw new Error(await readError(response, 'Could not share the bill copy.'))
+      const shared = await response.json() as SaleChatMessage
+      setSaleMessages((current) => [...current, shared])
+      setSharedBillFile(null); setRedactedConfirmed(false)
+      const picker = document.getElementById('sale-shared-bill') as HTMLInputElement | null
+      if (picker) picker.value = ''
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not share the bill copy.') }
+    finally { setBusy(false) }
+  }
+
+  // Downloads a shared bill through the authenticated participant-only API and releases its temporary URL.
+  async function downloadSharedBill(message: SaleChatMessage) {
+    if (!token || !selectedSaleInterest || !message.sharedBillId) return
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/sale-interests/${selectedSaleInterest}/messages/${message.id}/bill`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) throw new Error(await readError(response, 'Could not download the shared bill.'))
+      const objectUrl = URL.createObjectURL(await response.blob())
+      const anchor = document.createElement('a')
+      anchor.href = objectUrl
+      anchor.download = message.sharedBillFilename || 'shared-redacted-bill'
+      document.body.append(anchor); anchor.click(); anchor.remove()
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not download the shared bill.') }
   }
 
   // Fetches conversation history when an accepted, cancelled, or completed exchange is opened.
@@ -1123,6 +1246,28 @@ function ExchangesPage() {
     const timer = window.setInterval(() => { void poll() }, 5_000)
     return () => { active = false; window.clearInterval(timer) }
   }, [token, selected, exchanges, messages])
+
+  // Polls the selected accepted Sale conversation every five seconds and refreshes the unread badge.
+  useEffect(() => {
+    if (!token || !selectedSaleInterest) return
+    const item = saleInterests.find((candidate) => candidate.id === selectedSaleInterest)
+    if (!item || item.status !== 'ACCEPTED') return
+    let active = true
+    const poll = async () => {
+      const after = saleMessages.length ? saleMessages[saleMessages.length - 1].createdAt : undefined
+      try {
+        const incoming = await loadSaleMessages(token, selectedSaleInterest, after)
+        if (active && incoming.length) setSaleMessages((current) => [
+          ...current,
+          ...incoming.filter((message) => !current.some((existing) => existing.id === message.id)),
+        ])
+        const count = await loadUnreadCount(token)
+        if (active) setUnreadCount(count)
+      } catch { /* Temporary polling failures retry on the next interval. */ }
+    }
+    const timer = window.setInterval(() => { void poll() }, 5_000)
+    return () => { active = false; window.clearInterval(timer) }
+  }, [token, selectedSaleInterest, saleInterests, saleMessages])
 
   // Records chat presence every 30 seconds and displays only the other exchange participant's status.
   useEffect(() => {
@@ -1217,13 +1362,30 @@ function ExchangesPage() {
              <span>{item.book.title}{item.book.askingPrice !== null ? ` · INR ${item.book.askingPrice.toFixed(2)}` : ''}</span><span className="exchange-status">{item.status.toLowerCase()}</span>
            </button>
            {item.incoming && item.status === 'PENDING' ? <div className="sale-interest-actions"><button className="primary-button" disabled={busy} onClick={() => void performSaleInterestAction(item.id, 'accept', true)}>Accept · reserve book</button><button className="secondary-button" disabled={busy} onClick={() => void performSaleInterestAction(item.id, 'accept', false)}>Accept · keep listed</button><button className="text-button" disabled={busy} onClick={() => void performSaleInterestAction(item.id, 'decline')}>Decline</button></div> : null}
-           {item.status === 'ACCEPTED' ? <p className="field-help">Accepted{item.incoming && item.reserveListing ? '; listing reserved' : ''}. Private Sale chat will be available in the next feature step.</p> : null}
-           {item.incoming && item.status === 'CLOSED' ? <p className="field-help">This request closed because the listing was reserved for another buyer.</p> : null}
+           {item.status === 'ACCEPTED' ? <p className="field-help">Accepted{item.incoming && item.reserveListing ? '; listing reserved' : ''}{item.book.availability === 'SOLD' ? '; marked sold' : ''}. Private chat is open.</p> : null}
+           {item.incoming && item.status === 'ACCEPTED' && item.book.availability !== 'SOLD' ? <button className="secondary-button" disabled={busy} onClick={() => void markSaleInterestSold(item)}>Mark book sold</button> : null}
+           {item.incoming && item.status === 'CLOSED' ? <p className="field-help">This request closed because the listing was reserved or marked sold.</p> : null}
          </article>)}
         </div>}</section>}
       </div>
-      <aside className="add-book-panel exchange-chat-panel"><h2>{selectedSaleInterestItem ? 'Sale interest' : selectedExchange ? `Chat with ${partnerName}` : 'Exchange chat'}</h2>
-        {selectedSaleInterestItem ? <p className="empty-state">{selectedSaleInterestItem.status === 'ACCEPTED' ? 'The seller accepted this interest. A private Sale conversation is the next feature step.' : 'Sale chat opens only after the seller accepts an interest request.'}</p> : null}
+      <aside className="add-book-panel exchange-chat-panel"><h2>{selectedSaleInterestItem ? `Chat with ${selectedSaleInterestItem.incoming ? selectedSaleInterestItem.requesterName : selectedSaleInterestItem.ownerName}` : selectedExchange ? `Chat with ${partnerName}` : 'Exchange chat'}</h2>
+        {selectedSaleInterestItem?.status === 'ACCEPTED' ? <>
+          <div className="chat-history" aria-live="polite">{saleMessages.map((item) => <article className={item.senderId === member?.id ? 'chat-message own' : 'chat-message'} key={item.id}>
+            <strong>{item.senderName}</strong>
+            {item.text ? <p>{item.text}</p> : null}
+            {item.sharedBillId ? <button className="text-button shared-bill-download" onClick={() => void downloadSharedBill(item)}>Download shared bill: {item.sharedBillFilename}</button> : null}
+            <time>{new Date(item.createdAt).toLocaleString()}</time>
+          </article>)}{saleMessages.length === 0 ? <p className="empty-state">No messages yet. Contact each other to discuss the book.</p> : null}</div>
+          {selectedSaleInterestItem.incoming ? <form className="share-bill-form" onSubmit={shareSaleBill}>
+            <label htmlFor="sale-shared-bill">Share a redacted bill copy (optional)</label>
+            <input id="sale-shared-bill" type="file" accept="image/jpeg,image/png,application/pdf" required onChange={(event) => { setSharedBillFile(event.target.files?.[0] || null); setRedactedConfirmed(false) }} />
+            <span className="field-help">JPEG, PNG, or PDF up to 5 MB. Redact personal and payment details before uploading. Only this buyer can access the copy.</span>
+            <label className="redacted-confirmation"><input type="checkbox" required checked={redactedConfirmed} onChange={(event) => setRedactedConfirmed(event.target.checked)} /> I confirm this is a redacted copy I intend to share.</label>
+            <button className="secondary-button" disabled={busy || !sharedBillFile || !redactedConfirmed}>{busy ? 'Sharing…' : 'Share bill copy'}</button>
+          </form> : null}
+          <form className="chat-composer" onSubmit={sendSaleChatMessage}><label htmlFor="sale-chat-draft">Message</label><textarea id="sale-chat-draft" maxLength={2000} required value={saleDraft} onChange={(event) => setSaleDraft(event.target.value)} /><button className="primary-button" disabled={busy || !saleDraft.trim()}>Send</button></form>
+        </> : null}
+        {selectedSaleInterestItem && selectedSaleInterestItem.status !== 'ACCEPTED' ? <p className="empty-state">Sale chat opens after the seller accepts an interest request. This request is {selectedSaleInterestItem.status.toLowerCase()}.</p> : null}
         {selectedExchange && activeHistory ? <><p className="presence-label">{presence ? presence.online ? 'Online now' : presence.lastActiveAt ? `Last active ${formatLastActive(presence.lastActiveAt)}` : 'Status unavailable' : 'Checking status…'}</p>
           <div className="chat-history" aria-live="polite">{messages.map((item) => <article className={item.senderId === member?.id ? 'chat-message own' : 'chat-message'} key={item.id}><strong>{item.senderName}</strong><p>{item.text}</p><time>{new Date(item.createdAt).toLocaleString()}</time></article>)}{messages.length === 0 ? <p className="empty-state">No messages yet. Say hello to coordinate the exchange.</p> : null}</div>
           {selectedExchange.status === 'ACCEPTED' ? <form className="chat-composer" onSubmit={sendChatMessage}><label htmlFor="chat-draft">Message</label><textarea id="chat-draft" maxLength={2000} required value={draft} onChange={(event) => setDraft(event.target.value)} /><button className="primary-button" disabled={busy || !draft.trim()}>Send</button></form> : <p className="field-help">This conversation is read-only because the exchange is {selectedExchange.status.toLowerCase()}.</p>}

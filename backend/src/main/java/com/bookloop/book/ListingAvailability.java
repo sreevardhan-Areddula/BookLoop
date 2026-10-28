@@ -1,8 +1,9 @@
 package com.bookloop.book;
 
-/** Lifecycle state for a listing that can be reserved by an exchange. */
+/** Lifecycle state for an available, reserved, exchanged, or manually sold listing. */
 public enum ListingAvailability {
     AVAILABLE,
     RESERVED,
-    EXCHANGED
+    EXCHANGED,
+    SOLD
 }

@@ -66,5 +66,11 @@ public class BookListingController {
         );
     }
 
+    /** Marks the authenticated owner's Sale listing sold and closes its other pending interests. */
+    @PostMapping("/{id}/sold")
+    public BookListingResponse markSold(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return listingService.markSaleListingSold(UUID.fromString(jwt.getSubject()), id);
+    }
+
     public record SaleVerificationRequest(UUID saleBillDocumentId) { }
 }

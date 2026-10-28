@@ -289,6 +289,13 @@ h1 {
 .request-tabs { margin-top: -0.25rem; }
 .sale-interest-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .sale-interest-actions .primary-button, .sale-interest-actions .secondary-button { margin: 0; }
+.mark-sold-button { justify-self: start; margin-top: 0.55rem; }
+.share-bill-form { display: grid; gap: 0.5rem; margin-top: 0.85rem; padding: 0.8rem; border: 1px solid #e0e7e0; border-radius: 0.8rem; background: #fff; }
+.share-bill-form > label:first-child { color: #33483a; font-size: 0.9rem; font-weight: 700; }
+.share-bill-form .field-help { margin: 0; font-size: 0.78rem; }
+.redacted-confirmation { display: flex; align-items: flex-start; gap: 0.45rem; color: #45544a; font-size: 0.82rem; line-height: 1.4; }
+.redacted-confirmation input { margin-top: 0.2rem; }
+.shared-bill-download { margin: 0.35rem 0; text-align: left; overflow-wrap: anywhere; }
 .secondary-button { min-height: 2.7rem; padding: 0.55rem 0.85rem; border: 1px solid #cbd9cc; border-radius: 0.65rem; background: #fff; color: #315b3d; font: inherit; font-weight: 700; cursor: pointer; }
 .secondary-button:disabled { cursor: default; opacity: 0.65; }
 .exchange-chat-panel { position: sticky; top: 1rem; min-width: 0; }

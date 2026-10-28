@@ -14,6 +14,7 @@ The first genre choices are Biography, Children, Fantasy, Fiction, History, Myst
 - `GET /api/books/mine` returns only the authenticated member's listings.
 - `POST /api/books` creates a listing for the authenticated member. It accepts `title`, `author`, `genres`, `condition`, `offerType`, and optional `isbn` and `description`. Sale listings also require `askingPrice`; optional `saleBillDocumentId` links a bill that has passed its OCR price check.
 - `PUT /api/books/{id}/sale-verification` accepts `{ "saleBillDocumentId": "..." }` and lets the listing owner attach a bill that passed OCR for the current asking price.
+- `POST /api/books/{id}/sold` lets the listing owner mark a Sale listing sold. It disappears from Browse and other pending Sale interests close; accepted conversation history remains available.
 
 ## Sale listing verification
 
@@ -21,4 +22,4 @@ Sellers can publish a sale listing without a bill; it appears with **Price unver
 
 ## Remaining marketplace work
 
-Private buyer/seller chat, redacted bill sharing, and manual sold marking remain separate marketplace work. Sale interest creation and seller decisions are documented in [sale-interest-workflow.md](sale-interest-workflow.md).
+Free-book claim and handover behavior is still pending. Sale interest requests, private chat, redacted bill sharing, and manual sold marking are documented in [sale-interest-workflow.md](sale-interest-workflow.md).
