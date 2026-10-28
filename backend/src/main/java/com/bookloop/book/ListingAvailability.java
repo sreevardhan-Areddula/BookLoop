@@ -5,5 +5,6 @@ public enum ListingAvailability {
     AVAILABLE,
     RESERVED,
     EXCHANGED,
+    HANDED_OVER,
     SOLD
 }

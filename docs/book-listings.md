@@ -24,7 +24,7 @@ Sellers can publish a sale listing without a bill; it appears with **Price unver
 
 Members can request another member's available Free listing. The owner reviews each request and may accept or decline it. Multiple requests can remain pending; accepting one reserves the listing, removes it from Browse, and closes competing pending requests. Acceptance opens a private text chat for arranging pickup. Either participant can cancel an accepted claim, which makes the listing available again and leaves the conversation read-only. A cancelled claim's history stays visible. New requests trigger an owner email, and the Exchanges badge counts unreviewed incoming requests and unread messages. Claims do not expire.
 
-The owner has no action to mark pickup complete yet, so an accepted listing remains reserved unless the claim is cancelled. See [free-claim workflow](free-claim-workflow.md).
+The owner can mark an accepted pickup handed over. This permanently removes the listing from Browse and makes the claim and chat read-only. See [free-claim workflow](free-claim-workflow.md).
 
 ## Remaining marketplace work
 

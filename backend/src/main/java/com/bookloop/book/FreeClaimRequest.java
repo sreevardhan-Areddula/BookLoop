@@ -53,6 +53,9 @@ public class FreeClaimRequest {
     @Column(name = "accepted_at")
     private Instant acceptedAt;
 
+    @Column(name = "handed_over_at")
+    private Instant handedOverAt;
+
     @Column(name = "cancelled_at")
     private Instant cancelledAt;
 
@@ -79,6 +82,13 @@ public class FreeClaimRequest {
 
     /** Records the owner's decision after the service reserves the listing. */
     public void accept(Instant now) { requirePending(); status = FreeClaimStatus.ACCEPTED; acceptedAt = now; }
+
+    /** Records that the owner completed the offline handover. */
+    public void markHandedOver(Instant now) {
+        if (status != FreeClaimStatus.ACCEPTED) throw new IllegalArgumentException("Only an accepted claim can be marked handed over.");
+        status = FreeClaimStatus.HANDED_OVER;
+        handedOverAt = now;
+    }
 
     /** Declines a pending claim without changing listing availability. */
     public void decline() { requirePending(); status = FreeClaimStatus.DECLINED; }
@@ -115,6 +125,7 @@ public class FreeClaimRequest {
     public FreeClaimStatus getStatus() { return status; }
     public Instant getOwnerViewedAt() { return ownerViewedAt; }
     public Instant getAcceptedAt() { return acceptedAt; }
+    public Instant getHandedOverAt() { return handedOverAt; }
     public Instant getCancelledAt() { return cancelledAt; }
     public Account getCancelledBy() { return cancelledBy; }
     public Instant getCreatedAt() { return createdAt; }

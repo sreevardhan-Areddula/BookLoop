@@ -13,7 +13,6 @@ This page describes what the current code supports. Approved product behavior th
 
 ## Pending
 
-- Marking a Free-book pickup as handed over or otherwise completed. An accepted claim reserves the listing until either participant cancels it; the pickup completion decision is still open.
 - Hosting and deployment.
 
 ## Known scope boundaries
@@ -21,6 +20,6 @@ This page describes what the current code supports. Approved product behavior th
 - Sale interest acceptance is not a completed sale and does not process payments.
 - The OCR tick confirms only that the asking price is below a paid amount read from the uploaded bill. It does not establish bill authenticity.
 - Sale bill files are private; the current UI and API do not provide a public bill link or buyer chat attachment flow.
-- Free claims do not expire. Owners must accept or decline each claim; accepting one closes other pending claims and reserves the listing. There is no pickup completion action yet.
+- Free claims do not expire. Owners must accept or decline each claim; accepting one closes other pending claims and reserves the listing. The owner can mark an accepted pickup handed over, which removes the listing permanently from Browse.
 
 Update this page alongside the relevant workflow guide whenever implementation status changes.

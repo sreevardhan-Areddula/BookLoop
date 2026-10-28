@@ -4,6 +4,7 @@ package com.bookloop.book;
 public enum FreeClaimStatus {
     PENDING,
     ACCEPTED,
+    HANDED_OVER,
     DECLINED,
     CLOSED,
     CANCELLED

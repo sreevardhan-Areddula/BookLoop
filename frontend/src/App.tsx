@@ -22,7 +22,7 @@ type BookListing = {
   description: string | null
   ownerName: string
   createdAt: string
-  availability: 'AVAILABLE' | 'RESERVED' | 'EXCHANGED' | 'SOLD'
+  availability: 'AVAILABLE' | 'RESERVED' | 'EXCHANGED' | 'HANDED_OVER' | 'SOLD'
   salePriceVerified: boolean
 }
 type SaleBillUpload = { id: string }
@@ -66,10 +66,10 @@ type SaleChatMessage = {
   id: string; senderId: string; senderName: string; text: string | null; createdAt: string; readAt: string | null
   sharedBillId: string | null; sharedBillFilename: string | null
 }
-type FreeClaimStatus = 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'CLOSED' | 'CANCELLED'
+type FreeClaimStatus = 'PENDING' | 'ACCEPTED' | 'HANDED_OVER' | 'DECLINED' | 'CLOSED' | 'CANCELLED'
 type FreeClaimItem = {
   id: string; status: FreeClaimStatus; book: BookListing; requesterId: string; requesterName: string
-  ownerId: string; ownerName: string; incoming: boolean; createdAt: string; acceptedAt: string | null
+  ownerId: string; ownerName: string; incoming: boolean; createdAt: string; acceptedAt: string | null; handedOverAt: string | null
   cancelledAt: string | null; cancelledById: string | null
 }
 type FreeClaimMessage = { id: string; senderId: string; senderName: string; text: string; createdAt: string; readAt: string | null }
@@ -1214,7 +1214,7 @@ function ExchangesPage() {
   }
 
   // Lets the owner accept or decline, or either participant cancel, then refreshes requests and chat state.
-  async function performFreeClaimAction(id: string, action: 'accept' | 'decline' | 'cancel') {
+  async function performFreeClaimAction(id: string, action: 'accept' | 'decline' | 'cancel' | 'hand-over') {
     if (!token || busy) return
     setBusy(true); setError('')
     try {
@@ -1223,7 +1223,7 @@ function ExchangesPage() {
       })
       if (!response.ok) throw new Error(await readError(response, `Could not ${action} this Free-book claim.`))
       await loadFreeClaims(token)
-      if (action === 'accept') {
+      if (action === 'accept' || action === 'hand-over') {
         setSelectedFreeClaim(id)
         setFreeMessages(await loadFreeMessages(token, id))
       } else if (action === 'cancel' && selectedFreeClaim === id) {
@@ -1508,18 +1508,20 @@ function ExchangesPage() {
            </button>
            {item.incoming && item.status === 'PENDING' ? <div className="exchange-actions"><button className="primary-button" disabled={busy} onClick={() => void performFreeClaimAction(item.id, 'accept')}>Accept · reserve book</button><button className="secondary-button" disabled={busy} onClick={() => void performFreeClaimAction(item.id, 'decline')}>Decline</button></div> : null}
            {['PENDING', 'ACCEPTED'].includes(item.status) ? <button className="text-button" disabled={busy} onClick={() => void performFreeClaimAction(item.id, 'cancel')}>Cancel claim</button> : null}
+           {item.incoming && item.status === 'ACCEPTED' ? <button className="secondary-button" disabled={busy} onClick={() => void performFreeClaimAction(item.id, 'hand-over')}>Mark handed over</button> : null}
            {item.status === 'ACCEPTED' ? <p className="field-help">The book is reserved. Use private chat to arrange pickup.</p> : null}
+           {item.status === 'HANDED_OVER' ? <p className="field-help">Pickup completed. This claim and chat are read-only.</p> : null}
            {item.status === 'CLOSED' ? <p className="field-help">This claim closed because another claimant was accepted.</p> : null}
            {item.status === 'CANCELLED' ? <p className="field-help">The claim was cancelled. The book is available again.</p> : null}
          </article>)}
        </div>}</section>}
       </div>
       <aside className="add-book-panel exchange-chat-panel"><h2>{selectedFreeClaimItem ? `Chat with ${selectedFreeClaimItem.incoming ? selectedFreeClaimItem.requesterName : selectedFreeClaimItem.ownerName}` : selectedSaleInterestItem ? `Chat with ${selectedSaleInterestItem.incoming ? selectedSaleInterestItem.requesterName : selectedSaleInterestItem.ownerName}` : selectedExchange ? `Chat with ${partnerName}` : 'Exchange chat'}</h2>
-        {selectedFreeClaimItem && ['ACCEPTED', 'CANCELLED'].includes(selectedFreeClaimItem.status) ? <>
+        {selectedFreeClaimItem && ['ACCEPTED', 'HANDED_OVER', 'CANCELLED'].includes(selectedFreeClaimItem.status) ? <>
           <div className="chat-history" aria-live="polite">{freeMessages.map((item) => <article className={item.senderId === member?.id ? 'chat-message own' : 'chat-message'} key={item.id}><strong>{item.senderName}</strong><p>{item.text}</p><time>{new Date(item.createdAt).toLocaleString()}</time></article>)}{freeMessages.length === 0 ? <p className="empty-state">No messages yet. Arrange a pickup with the book owner.</p> : null}</div>
-          {selectedFreeClaimItem.status === 'ACCEPTED' ? <form className="chat-composer" onSubmit={sendFreeChatMessage}><label htmlFor="free-chat-draft">Message</label><textarea id="free-chat-draft" maxLength={2000} required value={freeDraft} onChange={(event) => setFreeDraft(event.target.value)} /><button className="primary-button" disabled={busy || !freeDraft.trim()}>Send</button></form> : <p className="field-help">This chat is read-only because the claim was cancelled. The listing is available again.</p>}
+          {selectedFreeClaimItem.status === 'ACCEPTED' ? <form className="chat-composer" onSubmit={sendFreeChatMessage}><label htmlFor="free-chat-draft">Message</label><textarea id="free-chat-draft" maxLength={2000} required value={freeDraft} onChange={(event) => setFreeDraft(event.target.value)} /><button className="primary-button" disabled={busy || !freeDraft.trim()}>Send</button></form> : <p className="field-help">This chat is read-only because the claim is {selectedFreeClaimItem.status === 'HANDED_OVER' ? 'complete' : 'cancelled'}.</p>}
         </> : null}
-        {selectedFreeClaimItem && !['ACCEPTED', 'CANCELLED'].includes(selectedFreeClaimItem.status) ? <p className="empty-state">Private chat opens when the owner accepts the request. This claim is {selectedFreeClaimItem.status.toLowerCase()}.</p> : null}
+        {selectedFreeClaimItem && !['ACCEPTED', 'HANDED_OVER', 'CANCELLED'].includes(selectedFreeClaimItem.status) ? <p className="empty-state">Private chat opens when the owner accepts the request. This claim is {selectedFreeClaimItem.status.toLowerCase()}.</p> : null}
         {selectedSaleInterestItem?.status === 'ACCEPTED' ? <>
           <div className="chat-history" aria-live="polite">{saleMessages.map((item) => <article className={item.senderId === member?.id ? 'chat-message own' : 'chat-message'} key={item.id}>
             <strong>{item.senderName}</strong>

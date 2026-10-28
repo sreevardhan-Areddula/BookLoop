@@ -19,7 +19,7 @@ MySQL stores account and marketplace records, including private sale-bill bytes.
 
 ## Implemented and pending features
 
-See [implementation status](implementation-status.md) for the detailed current feature boundary. Exchange chat, Sale interest and private chat flows, and owner-reviewed Free-book claims are implemented. A Free-book pickup completion action remains undecided.
+See [implementation status](implementation-status.md) for the detailed current feature boundary. Exchange chat, Sale interest and private chat flows, and owner-reviewed Free-book claims with owner-confirmed handover are implemented.
 
 ## Deployment
 

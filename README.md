@@ -17,7 +17,7 @@ BookLoop is a peer-to-peer book-sharing, exchange, and sale-interest platform.
 
 ## Current features
 
-BookLoop currently supports verified member accounts, profile management, book listings, search, exchange requests and chat, OCR-assisted sale-bill price checks, Sale interest/chat/sold workflows, and owner-reviewed Free-book claims with private chat. The Free-book pickup completion action remains undecided. See [implementation status](docs/implementation-status.md) for the current feature boundary and [product requirements](docs/product-requirements.md) for approved behavior.
+BookLoop currently supports verified member accounts, profile management, book listings, search, exchange requests and chat, OCR-assisted sale-bill price checks, Sale interest/chat/sold workflows, and owner-reviewed Free-book claims with private chat and handover completion. See [implementation status](docs/implementation-status.md) for the current feature boundary and [product requirements](docs/product-requirements.md) for approved behavior.
 
 ## Run locally
 

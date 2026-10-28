@@ -58,6 +58,12 @@ public class FreeClaimController {
         return claimService.declineClaim(UUID.fromString(jwt.getSubject()), id);
     }
 
+    /** Lets the listing owner record that the reserved Free book was handed over. */
+    @PostMapping("/{id}/hand-over")
+    public FreeClaimRequestResponse handOver(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return claimService.handOverClaim(UUID.fromString(jwt.getSubject()), id);
+    }
+
     /** Lets either participant cancel a pending or accepted claim. */
     @PostMapping("/{id}/cancel")
     public FreeClaimRequestResponse cancel(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {

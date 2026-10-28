@@ -20,7 +20,7 @@ This document records approved first-version product behavior. It describes inte
 - The listing city comes from the member profile.
 - Sale price is seller-set; the first version does not process payment.
 - A member can request another member's available Free listing. The owner reviews claims; accepting reserves the listing, closes other pending claims, and opens a private chat for pickup coordination. Either participant can cancel, releasing the reservation and preserving read-only chat history.
-- The method for recording a completed pickup remains undecided; accepted claims stay reserved until cancelled in this version.
+- The listing owner can mark an accepted pickup handed over. This completes the claim, removes the listing from Browse, and preserves read-only history.
 
 ## Sale listings
 
@@ -49,4 +49,3 @@ This document records approved first-version product behavior. It describes inte
 
 - Hosting and production deployment.
 - Payment handling and sale completion beyond manually marking a listing sold.
-- The action and state transition for recording completed Free-book pickup.

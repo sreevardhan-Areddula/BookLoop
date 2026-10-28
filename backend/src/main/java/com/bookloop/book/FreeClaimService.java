@@ -112,6 +112,23 @@ public class FreeClaimService {
         return FreeClaimRequestResponse.from(claim, memberId);
     }
 
+    /** Lets the listing owner complete the offline pickup and permanently removes the book from Browse. */
+    @Transactional
+    public FreeClaimRequestResponse handOverClaim(UUID memberId, UUID claimId) {
+        FreeClaimRequest initial = findClaim(claimId);
+        BookListing listing = listingRepository.findByIdForUpdate(initial.getListing().getId())
+                .orElseThrow(() -> new IllegalArgumentException("Free listing was not found."));
+        FreeClaimRequest claim = claimRepository.findByIdForUpdate(claimId)
+                .orElseThrow(() -> new IllegalArgumentException("Free-book claim was not found."));
+        requireOwner(claim, memberId);
+        if (listing.getAvailability() != ListingAvailability.RESERVED) {
+            throw new IllegalArgumentException("This Free listing is no longer reserved by this claim.");
+        }
+        claim.markHandedOver(Instant.now());
+        listing.setAvailability(ListingAvailability.HANDED_OVER);
+        return FreeClaimRequestResponse.from(claim, memberId);
+    }
+
     /** Cancels a participant's pending or accepted claim; an accepted cancellation releases the reservation. */
     @Transactional
     public FreeClaimRequestResponse cancelClaim(UUID memberId, UUID claimId) {
@@ -172,7 +189,7 @@ public class FreeClaimService {
     private FreeClaimRequest requireConversationParticipant(UUID memberId, UUID claimId) {
         FreeClaimRequest claim = findClaim(claimId);
         requireParticipant(claim, memberId);
-        if (claim.getStatus() != FreeClaimStatus.ACCEPTED && claim.getStatus() != FreeClaimStatus.CANCELLED) {
+        if (claim.getStatus() != FreeClaimStatus.ACCEPTED && claim.getStatus() != FreeClaimStatus.HANDED_OVER && claim.getStatus() != FreeClaimStatus.CANCELLED) {
             throw new IllegalArgumentException("This Free-book claim has no chat history.");
         }
         return claim;
